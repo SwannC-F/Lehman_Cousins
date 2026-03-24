@@ -8,7 +8,7 @@
 //! empty, requests are rejected with a clear `RateLimitExceeded` error,
 //! preventing the exchange from issuing IP bans or penalty lockouts.
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 /// Rate-limiting error. Not a network failure; signals that the strategy
@@ -48,8 +48,8 @@ impl TokenBucket {
     /// Returns `Err(RateLimitError)` if the bucket is empty, including the
     /// exact `Duration` to wait before a token will become available.
     pub fn consume(&self) -> Result<(), RateLimitError> {
-        let mut tokens_guard = self.tokens.lock().unwrap();
-        let mut last_update_guard = self.last_update.lock().unwrap();
+        let mut tokens_guard = self.tokens.lock();
+        let mut last_update_guard = self.last_update.lock();
 
         let now = Instant::now();
         let elapsed = now.duration_since(*last_update_guard);
@@ -75,8 +75,8 @@ impl TokenBucket {
     pub fn available_tokens(&self) -> f64 {
         // We do a mock refill calculation to return an accurate instant value
         // without actually mutating the state.
-        let tokens = *self.tokens.lock().unwrap();
-        let last_update = *self.last_update.lock().unwrap();
+        let tokens = *self.tokens.lock();
+        let last_update = *self.last_update.lock();
 
         let elapsed = Instant::now().duration_since(last_update);
         let new_tokens = elapsed.as_secs_f64() * self.fill_rate_per_sec;

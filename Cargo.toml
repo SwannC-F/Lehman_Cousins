@@ -76,6 +76,7 @@ rust_decimal_macros      = "1"
 # ── Concurrency & messaging ──────────────────────────────────────────────────
 tokio-util = { version = "0.7", features = ["codec"] }
 dashmap    = "5"
+parking_lot = "0.12"
 
 # ── Order-book arena allocation ─────────────────────────────────────────────
 # smallvec: stack-allocated Vec for small price-level arrays (avoids heap
