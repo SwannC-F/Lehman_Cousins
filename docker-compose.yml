@@ -1,0 +1,33 @@
+services:
+  db:
+    # TimescaleDB — Postgres extension for time-series.
+    # Use this image in dev; in prod, run TimescaleDB on a dedicated EC2
+    # instance or use Amazon RDS with the timescaledb extension enabled.
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lehman
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lehman_db
+      TIMESCALEDB_TELEMETRY: "off"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "9090:9090"   # Prometheus metrics
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://lehman:password@db:5432/lehman_db
+
+volumes:
+  postgres_data:

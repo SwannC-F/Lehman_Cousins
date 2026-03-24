@@ -1,0 +1,116 @@
+[package]
+name        = "lehman_cousins"
+version     = "0.1.0"
+edition     = "2021"
+authors     = ["Lehman Cousins Dev Team"]
+description = "Production-grade algorithmic trading engine — StatArb & Market Making on crypto secondary markets"
+license     = "UNLICENSED"
+
+[[bin]]
+name = "lehman_cousins"
+path = "src/main.rs"
+
+# ---------------------------------------------------------------------------
+# [lib] — expose core types to integration tests and benchmarks
+# ---------------------------------------------------------------------------
+[lib]
+name = "lehman_cousins_core"
+path = "src/lib.rs"
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+[dependencies]
+
+# ── Async runtime ───────────────────────────────────────────────────────────
+tokio        = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1" }
+
+# ── WebSocket (exchange feeds) ───────────────────────────────────────────────
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+futures-util      = "0.3"
+
+# ── HTTP / REST client ───────────────────────────────────────────────────────
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# ── Serialization ────────────────────────────────────────────────────────────
+serde      = { version = "1", features = ["derive"] }
+
+# simd-json: SIMD-accelerated JSON parser with zero-copy &str borrows from
+# the network buffer. Used on the hot WebSocket path. Requires x86-64 / ARM64.
+# Feature "serde_impl" bridges the existing serde Deserialize derives.
+# simd-json falls back automatically on non-SIMD hardware — no feature flag needed.
+# `known-key` enables fxhash for well-known field lookups (e.g. "price", "qty").
+simd-json  = { version = "0.13", features = ["serde_impl", "known-key"] }
+
+# serde_json kept ONLY for non-latency-critical paths (config loading, REST
+# response parsing). Do NOT use it inside the WebSocket message handler.
+serde_json = "1"
+
+# ── Structured logging ───────────────────────────────────────────────────────
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# ── Configuration & environment ──────────────────────────────────────────────
+config      = { version = "0.13", features = ["toml"] }
+async-trait = "0.1"
+dotenvy = "0.15"
+
+# ── Database (tick storage — TimescaleDB) ──────────────────────────────────
+# TimescaleDB is a Postgres extension: same sqlx driver, but the targeted
+# table MUST be converted to a hypertable (see migrations/). This gives:
+#   • columnar compression (10-20× storage reduction)
+#   • automatic chunk pruning per time interval
+#   • parallel query on time ranges
+# Production target: TimescaleDB 2.x on AWS RDS or self-hosted on EC2.
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "migrate"] }
+
+# ── Time & UUID ──────────────────────────────────────────────────────────────
+chrono = { version = "0.4", features = ["serde"] }
+uuid   = { version = "1", features = ["v4", "serde"] }
+
+# ── Decimal arithmetic (financial calculations) ──────────────────────────────
+rust_decimal             = { version = "1", features = ["serde-with-str"] }
+rust_decimal_macros      = "1"
+
+# ── Concurrency & messaging ──────────────────────────────────────────────────
+tokio-util = { version = "0.7", features = ["codec"] }
+dashmap    = "5"
+
+# ── Order-book arena allocation ─────────────────────────────────────────────
+# smallvec: stack-allocated Vec for small price-level arrays (avoids heap
+# allocation for books with few levels, e.g. internal crossing detection).
+smallvec = { version = "1", features = ["serde", "union"] }
+
+# ── Error handling ───────────────────────────────────────────────────────────
+anyhow  = "1"
+thiserror = "1"
+
+# ── Metrics (Prometheus endpoint) ────────────────────────────────────────────
+metrics            = "0.22"
+metrics-exporter-prometheus = "0.13"
+
+# ── Graceful shutdown ────────────────────────────────────────────────────────
+tokio-graceful-shutdown = "0.14"
+
+# ---------------------------------------------------------------------------
+# Dev dependencies
+# ---------------------------------------------------------------------------
+[dev-dependencies]
+tokio   = { version = "1", features = ["full", "test-util"] }
+mockall = "0.12"
+wiremock = "0.5"
+
+# ---------------------------------------------------------------------------
+# Profile tweaks
+# ---------------------------------------------------------------------------
+[profile.release]
+opt-level       = 3
+lto             = "fat"
+codegen-units   = 1
+panic           = "abort"
+strip           = "symbols"
+
+[profile.dev]
+opt-level = 0
+debug     = true
