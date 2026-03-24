@@ -3,7 +3,7 @@
 //! [`MarketEvent`] is broadcast over a Tokio broadcast channel from the
 //! feed ingestion layer to all registered strategies. No logic lives here.
 
-use crate::core::models::{OrderBookUpdate, Trade};
+use crate::core::models::{ExecutionReport, OrderBookUpdate, Trade};
 
 /// All market events that flow through the internal broadcast bus.
 #[derive(Debug, Clone)]
@@ -19,4 +19,7 @@ pub enum MarketEvent {
 
     /// The exchange connection was lost.
     Disconnected { exchange: String, reason: String },
+
+    /// A private execution report for a managed order.
+    ExecutionReport(ExecutionReport),
 }

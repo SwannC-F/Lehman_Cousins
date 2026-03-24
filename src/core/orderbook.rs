@@ -77,10 +77,8 @@ impl OrderBook {
             return;
         }
         self.sequence = update.sequence;
-        for lvl in &update.bids { self.upsert_level(&mut self.bids.clone(), lvl, Side::Buy); }
-        for lvl in &update.asks { self.upsert_level(&mut self.asks.clone(), lvl, Side::Sell); }
 
-        // Re-sort after batch apply (avoids O(n²) when many levels arrive)
+        // Apply batches with in-place vector mutation and binary search
         Self::apply_batch(&mut self.bids, &update.bids, Side::Buy);
         Self::apply_batch(&mut self.asks, &update.asks, Side::Sell);
     }
@@ -158,11 +156,6 @@ impl OrderBook {
             Side::Sell => lvl.price < target,
         }
     }
-
-    /// Placeholder kept for the `apply` method above; real dispatch goes
-    /// through `apply_batch`.
-    #[inline]
-    fn upsert_level(&self, _slab: &mut Vec<PriceLevel>, _lvl: &PriceLevel, _side: Side) {}
 }
 
 // ---------------------------------------------------------------------------

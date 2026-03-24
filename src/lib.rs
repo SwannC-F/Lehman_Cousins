@@ -28,6 +28,7 @@ pub mod strategies {
 pub mod risk_manager {
     pub mod manager;
     pub mod checks;
+    pub mod inventory;
 }
 
 pub mod order_manager;

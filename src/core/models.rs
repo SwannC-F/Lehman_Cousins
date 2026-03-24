@@ -12,6 +12,9 @@ use uuid::Uuid;
 // Market Data
 // ---------------------------------------------------------------------------
 
+/// High-performance integer identifier for tracking symbols.
+pub type SymbolId = u32;
+
 /// A single price level in an order book (price + quantity).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PriceLevel {
@@ -38,6 +41,18 @@ pub struct OrderBookUpdate {
     pub asks: Vec<PriceLevel>,
     pub sequence: u64,
     pub timestamp: DateTime<Utc>,
+}
+
+/// A private execution report from the exchange indicating an order update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionReport {
+    pub client_id: Uuid,
+    pub symbol_id: SymbolId,
+    pub symbol: String,
+    pub order_status: OrderStatus,
+    pub executed_quantity: Decimal, // filled in this specific report
+    pub price: Decimal,
+    pub side: Side,
 }
 
 // ---------------------------------------------------------------------------

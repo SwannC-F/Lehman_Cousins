@@ -16,13 +16,14 @@ use tracing::{error, warn};
 use crate::{
     config::RiskConfig,
     core::models::{Order, Side},
-    risk_manager::checks,
+    risk_manager::{checks, inventory::PositionTracker},
 };
 
 /// Shared state managed by the risk manager.
 pub struct RiskManager {
     config: RiskConfig,
     open_order_count: AtomicU32,
+    position_tracker: PositionTracker,
     // Additional state (daily P&L, peak equity) to be added here.
 }
 
@@ -31,6 +32,7 @@ impl RiskManager {
         Self {
             config,
             open_order_count: AtomicU32::new(0),
+            position_tracker: PositionTracker::new(),
         }
     }
 
@@ -62,6 +64,11 @@ impl RiskManager {
     /// Notify the manager that a new order was accepted by the exchange.
     pub fn on_order_opened(&self) {
         self.open_order_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Notify the manager of an execution to update internal inventory.
+    pub fn on_execution_report(&self, report: &crate::core::models::ExecutionReport) {
+        self.position_tracker.apply_execution(report);
     }
 
     /// Notify the manager that an order reached a terminal state.
