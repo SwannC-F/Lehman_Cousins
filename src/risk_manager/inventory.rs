@@ -32,6 +32,11 @@ impl PositionTracker {
         }
     }
 
+    /// Forcefully set a position (used exclusively during boot reconciliation).
+    pub fn set_position(&self, symbol_id: SymbolId, qty: Decimal) {
+        self.positions.insert(symbol_id, qty);
+    }
+
     /// Retrieve the net position for a symbol.
     pub fn get_position(&self, symbol_id: SymbolId) -> Decimal {
         self.positions
