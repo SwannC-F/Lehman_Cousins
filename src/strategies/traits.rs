@@ -1,39 +1,30 @@
 //! Strategy abstraction trait.
 //!
 //! Each concrete trading strategy (StatArb, Market Making, …) must implement
-//! this trait. The engine calls `on_event` for every market event it receives.
-//! Order submission goes through the injected `ExchangeClient`.
-//!
-//! No concrete strategy logic is implemented here.
+//! this trait. To ensure backtest parity and prevent I/O blocking, the strategy
+//! is a pure mathematical construct. It reacts to events and returns orders.
+//! It must never hold network bindings (`ExchangeClient`).
 
 use anyhow::Result;
-use async_trait::async_trait;
 
 use crate::{
     core::events::MarketEvent,
-    exchange_clients::traits::ExchangeClient,
+    core::models::Order,
 };
 
-/// The interface every strategy module must satisfy.
-#[async_trait]
+/// The pure, mathematics-only interface every strategy module must satisfy.
 pub trait Strategy: Send + Sync + 'static {
     /// Human-readable strategy name used in logs and metrics.
     fn name(&self) -> &str;
 
     /// Called once before the event loop begins.
-    /// Use to warm up state, load parameters, or subscribe to feeds.
-    async fn on_start(&mut self, client: &dyn ExchangeClient) -> Result<()>;
+    /// Pure state initialization.
+    fn on_start(&mut self) -> Result<()>;
 
-    /// Called for every [`MarketEvent`] broadcast on the internal bus.
-    /// Implementations should be non-blocking; heavy computation must be
-    /// dispatched to a blocking thread via `tokio::task::spawn_blocking`.
-    async fn on_event(
-        &mut self,
-        event: &MarketEvent,
-        client: &dyn ExchangeClient,
-    ) -> Result<()>;
+    /// Pure mathematical function: takes an event, returns optional Orders.
+    /// Completely uncoupled from network async routines.
+    fn on_event(&mut self, event: &MarketEvent) -> Option<Vec<Order>>;
 
-    /// Called when a graceful shutdown is requested.
-    /// Cancel open orders and flush any in-flight state here.
-    async fn on_stop(&mut self, client: &dyn ExchangeClient) -> Result<()>;
+    /// Called when stopping.
+    fn on_stop(&mut self) -> Result<()>;
 }

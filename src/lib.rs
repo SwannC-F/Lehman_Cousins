@@ -8,9 +8,10 @@ pub mod engine;
 pub mod telemetry;
 
 pub mod core {
-    pub mod models;
     pub mod events;
+    pub mod models;
     pub mod orderbook;
+    pub mod instrument;
     pub mod feed_state;
 }
 
@@ -31,7 +32,12 @@ pub mod risk_manager {
     pub mod inventory;
 }
 
-pub mod order_manager;
+pub mod order_manager {
+    pub mod manager;
+    pub mod nonce;
+    pub mod rate_limiter;
+    pub mod in_flight;
+}
 
 pub mod utils {
     pub mod time;

@@ -7,7 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::core::events::MarketEvent;
-use crate::core::models::{Order, OrderBookUpdate, OrderStatus, Side, OrderType, SymbolId};
+use crate::core::models::{ExecutionReport, Order, OrderBookUpdate, OrderStatus, Side, OrderType, SymbolId};
 use rust_decimal::Decimal;
 
 /// Unified interface every exchange client must satisfy.
@@ -18,6 +18,9 @@ pub trait ExchangeClient: Send + Sync + 'static {
 
     /// Fetch real-world open positions to hydrate the inventory at boot (Fail-Fast).
     async fn fetch_positions(&self) -> Result<Vec<(SymbolId, Decimal)>>;
+
+    /// Reconcile a specific order status directly from the REST API (used by the Reaper Task).
+    async fn fetch_order_status(&self, client_id: uuid::Uuid) -> Result<ExecutionReport>;
 
     /// Cancel all open orders for emergency shutdown.
     async fn cancel_all_orders(&self) -> Result<()>;
