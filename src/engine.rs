@@ -8,6 +8,7 @@
 
 use anyhow::Result;
 use tokio::sync::{broadcast, mpsc};
+use tokio::task;
 use tokio::signal::unix::{signal, SignalKind};
 use tracing::{error, info, warn};
 
@@ -75,21 +76,60 @@ impl Engine {
         // ── Strategy-Execution Bridge (MPSC) ──────────────────────────────────
         let (order_tx, mut order_rx) = mpsc::channel::<Order>(1024);
 
-        // TODO: Pass order_tx to strategies. Strategies must use try_send:
-        // if let Err(e) = order_tx.try_send(order) {
-        //     warn!("Order dropped, execution channel full (Backpressure limit)");
-        // }
+        // ── Isolate Strategies (Pure Math & No Network) ───────────────────────
+        let _tx_clone = _tx.clone();
+        let strategy_tx = order_tx.clone();
+        for mut strategy in self.strategies {
+            let mut sub = _tx_clone.subscribe();
+            let strategy_tx = strategy_tx.clone();
+            tokio::spawn(async move {
+                let _ = strategy.on_start();
+                while let Ok(event) = sub.recv().await {
+                    // PURE MATH: completely synchronous, no async runtime needed.
+                    // Allows exact parity with Backtest framework.
+                    if let Some(orders) = strategy.on_event(&event) {
+                        for ord in orders {
+                            if let Err(e) = strategy_tx.try_send(ord) {
+                                warn!("Order dropped (Backpressure Limit / Fail-Fast): {}", e);
+                            }
+                        }
+                    }
+                }
+                let _ = strategy.on_stop();
+            });
+        }
 
         let risk_arc = std::sync::Arc::new(self.risk_manager);
         
+        let in_flight = std::sync::Arc::new(crate::order_manager::in_flight::InFlightTracker::new());
+        // Start the Garbage Collector for ghost orders (WS deaths)
+        crate::order_manager::in_flight::InFlightTracker::start_reaper(in_flight.clone());
+        
         // Execution worker thread
         tokio::spawn(async move {
-            while let Some(order) = order_rx.recv().await {
+            while let Some(mut order) = order_rx.recv().await {
                 if let Err(e) = risk_arc.validate_order(&order) {
                     warn!(error = %e, "Risk limit breached, order rejected");
                     continue;
                 }
-                // TODO: exchange_client.submit_order(&order).await;
+
+                // --- INSTRUMENT METADATA ROUNDING ---
+                // TODO: let instrument = instrument_manager.get(order.symbol_id);
+                // instrument.format_order(&mut order);
+
+                // --- IN-FLIGHT ORDER REGISTRATION ---
+                in_flight.register_order(order.clone());
+
+                // --- HMAC CPU OFFLOADING ---
+                // SHA-256 signing takes ~2µs. Doing this on the main event loop 1000 times
+                // stalls the WebSocket ingestion. We push cryptography to the blocking pool.
+                let _signed_payload = task::spawn_blocking(move || {
+                    // simulate cryptographic hashing logic here
+                    let _heavy_math = 2 + 2; 
+                    "signed_payload"
+                }).await.unwrap();
+
+                // TODO: exchange_client.submit_order(&order, _signed_payload).await;
             }
         });
 

@@ -19,7 +19,10 @@ use crate::{
         models::{Order, OrderStatus, OrderType, Side},
     },
     exchange_clients::traits::ExchangeClient,
-    order_manager::{NonceGenerator, RateLimitError, TokenBucket},
+    order_manager::{
+        nonce::NonceGenerator,
+        rate_limiter::{RateLimitError, TokenBucket},
+    },
     risk_manager::manager::RiskManager,
 };
 
