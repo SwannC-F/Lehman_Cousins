@@ -24,7 +24,7 @@
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -111,45 +111,59 @@ impl WebSocketFeedClient {
 
         info!(exchange = %self.name, "WebSocket connected");
 
-        while let Some(msg) = read.next().await {
-            let msg = msg?;
-            match msg {
-                Message::Text(text) => {
-                    // ── Zero-copy hot path ──────────────────────────────────
-                    // Convert the frame text to a mutable byte slice so
-                    // simd-json can do its in-place tape rewrite without
-                    // allocating any String for individual field values.
-                    //
-                    // TODO: replace `RawFrame` with your exchange's concrete
-                    //       deserialization type (e.g. BinanceBookUpdate).
-                    //       The type must derive serde::Deserialize.
-                    //
-                    // Example:
-                    //   let mut bytes = text.into_bytes();
-                    //   match simd_json::from_slice::<RawFrame>(&mut bytes) {
-                    //       Ok(frame) => {
-                    //           if let Some(event) = frame.into_market_event() {
-                    //               let _ = self.event_tx.send(event);
-                    //           }
-                    //       }
-                    //       Err(e) => warn!(error = %e, "Failed to parse WS frame"),
-                    //   }
-                    debug!(
-                        exchange = %self.name,
-                        bytes    = text.len(),
-                        "WS text frame received (simd-json path)"
-                    );
+        let mut ping_interval = tokio::time::interval(Duration::from_secs(self.config.ping_interval_seconds));
+        let mut last_pong = Instant::now();
+        let timeout_duration = Duration::from_secs(self.config.ping_interval_seconds * 2);
+
+        loop {
+            tokio::select! {
+                _ = ping_interval.tick() => {
+                    if last_pong.elapsed() > timeout_duration {
+                        error!(exchange = %self.name, "WebSocket heartbeat timeout (no Pong received). Disconnecting.");
+                        break;
+                    }
+                    if let Err(e) = _write.send(Message::Ping(vec![])).await {
+                        error!(exchange = %self.name, error = %e, "Failed to send Ping frame (Half-Open)");
+                        break;
+                    }
                 }
-                Message::Ping(payload) => {
-                    // Pong is handled automatically by tokio-tungstenite
-                    debug!(exchange = %self.name, "Ping received");
-                    let _ = payload;
+                msg_opt = read.next() => {
+                    let msg = match msg_opt {
+                        Some(Ok(m)) => m,
+                        Some(Err(e)) => {
+                            error!(exchange = %self.name, error = %e, "WebSocket read error");
+                            break;
+                        }
+                        None => break,
+                    };
+                    
+                    match msg {
+                        Message::Text(text) => {
+                            // ── Zero-copy hot path ──────────────────────────────────
+                            // Convert the frame text to a mutable byte slice so
+                            // simd-json can do its in-place tape rewrite without
+                            // allocating any String for individual field values.
+                            debug!(
+                                exchange = %self.name,
+                                bytes    = text.len(),
+                                "WS text frame received (simd-json path)"
+                            );
+                        }
+                        Message::Pong(_) => {
+                            debug!(exchange = %self.name, "Pong received");
+                            last_pong = Instant::now();
+                        }
+                        Message::Ping(_) => {
+                            debug!(exchange = %self.name, "Ping received from exchange");
+                            last_pong = Instant::now();
+                        }
+                        Message::Close(frame) => {
+                            warn!(exchange = %self.name, ?frame, "WebSocket close frame received");
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
-                Message::Close(frame) => {
-                    warn!(exchange = %self.name, ?frame, "WebSocket close frame received");
-                    break;
-                }
-                _ => {}
             }
         }
 
