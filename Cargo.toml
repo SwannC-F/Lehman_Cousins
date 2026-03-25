@@ -93,6 +93,10 @@ metrics-exporter-prometheus = "0.13"
 
 # ── Graceful shutdown ────────────────────────────────────────────────────────
 tokio-graceful-shutdown = "0.14"
+csv = "1.4.0"
+hmac = "0.12.1"
+sha2 = "0.10.9"
+hex = "0.4.3"
 
 # ---------------------------------------------------------------------------
 # Dev dependencies

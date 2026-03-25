@@ -1,0 +1,55 @@
+name: Lothaire's Barrier (CI/CD)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality_checks:
+    name: Code Quality & Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      # Enforce code style standard
+      - name: Cargo Formatting
+        run: cargo fmt --all -- --check
+        
+      # The Barrier: Zero warnings allowed, instant denial of technical debt
+      - name: Strict Clippy Lints
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        
+      # Execute Backtest and Core Engine unit tests
+      - name: Run Core & Quant Tests
+        run: cargo test --release
+
+  build_image:
+    name: Build Immutable Docker Fortress
+    needs: quality_checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Production Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false # (Change to true and setup container registry auth)
+          tags: lehman-cousins:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

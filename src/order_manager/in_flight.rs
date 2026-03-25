@@ -80,7 +80,7 @@ impl InFlightTracker {
                 
                 for entry in tracker.pending_orders.iter() {
                     if entry.value().timestamp.elapsed() > timeout {
-                        ghosts.push(entry.key().clone());
+                        ghosts.push(*entry.key());
                     }
                 }
 

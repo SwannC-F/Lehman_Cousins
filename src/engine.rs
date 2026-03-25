@@ -16,7 +16,7 @@ use crate::{
     config::AppConfig,
     core::events::MarketEvent,
     core::models::Order,
-    exchange_clients::{traits::ExchangeClient, websocket_client::WebSocketFeedClient},
+    exchange_clients::traits::ExchangeClient,
     risk_manager::manager::RiskManager,
     strategies::traits::Strategy,
 };
@@ -67,7 +67,7 @@ impl Engine {
     /// 2. Starts the strategy evaluation loop
     /// 3. Starts the order execution worker
     /// 4. Waits for SIGTERM / Ctrl-C and gracefully shuts down each task
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         info!("Engine running — awaiting shutdown signal (Ctrl-C / SIGTERM)");
 
         // ── Broadcast channel: feed → strategies ──────────────────────────────
@@ -107,7 +107,7 @@ impl Engine {
         
         // Execution worker thread
         tokio::spawn(async move {
-            while let Some(mut order) = order_rx.recv().await {
+            while let Some(order) = order_rx.recv().await {
                 if let Err(e) = risk_arc.validate_order(&order) {
                     warn!(error = %e, "Risk limit breached, order rejected");
                     continue;

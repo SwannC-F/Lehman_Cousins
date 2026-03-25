@@ -8,14 +8,14 @@
 //!
 //! No strategy-specific logic lives here — only cross-cutting risk rules.
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use rust_decimal::Decimal;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::{
     config::RiskConfig,
-    core::models::{Order, Side},
+    core::models::Order,
     risk_manager::{checks, inventory::PositionTracker},
 };
 
