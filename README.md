@@ -10,7 +10,7 @@ The architecture is built on a **Fail-Fast, Zero-Allocation, and Non-Blocking** 
 
 ## ✅ Production Hardened Features
 
-The engine has undergone 4 phases of rigorous technical remediation and auditing:
+The engine has undergone 5 phases of rigorous technical remediation and auditing:
 
 1. **Hot Path Zero-Allocation:** The `OrderBook` mutates pre-allocated memory in-place (`Vec::insert` using a O(log n) `partition_point` pointer) without ever relying on `clone()` within the hot path.
 2. **Lock-Free Inventory:** The exposure tracking engine (`PositionTracker`) is indexed by pure integers (`SymbolId`) and powered by an asynchronous `DashMap` to prevent any OS context-switching contention (`parking_lot::Mutex`).
@@ -26,6 +26,12 @@ The engine has undergone 4 phases of rigorous technical remediation and auditing
 5. **Strict Backtesting Harness:**
    - **Pure CPU-Bound Execution:** Synchronous O(N) ingestion reading historical CSV tick flows (Zero-Tokio overhead).
    - **Ruthless PaperTrader:** Automatically enforces Spread Crossing (buys on Ask, sells on Bid) and systematically deducts a **0.1% Taker Fee**, ensuring any mathematically profitable backtest translates directly into Live profitability.
+6. **DevSecOps Fortress & Day-2 Operations:**
+   - **Docker Distroless:** The engine is compiled via a multi-stage builder and deployed in a barebones `gcr.io/distroless/cc-debian12` container without a shell, executing strictly as `USER nonroot` to neutralize zero-day container escapes.
+   - **Conditional Orchestration:** `docker-compose.yml` employs `depends_on: condition: service_healthy` to ping for TimescaleDB readiness, destroying blind crash-loops that trigger Exchange IP bans.
+   - **GitHub Actions (Lothaire's Barrier):** Enforces a strict `.github/workflows/deploy.yml` pipeline that auto-blocks any merge triggering `cargo clippy` warnings or failing the quantitative tests before pushing the immutable image.
+   - **Asynchronous Webhook Alerting:** A dedicated HTTP client rigorously bounded by a **2-second timeout** alerts Slack/Discord upon critical drawdowns or WS losses, preventing network API lag from freezing the engine.
+   - **KMS Secrets Expatriation:** File-based `.env` loading is vanished. API credentials are hydrated directly into RAM at boot via an asynchronous AWS Secrets Manager fetch equipped with a resilient **Exponential Backoff** retry algorithm.
 
 ---
 
