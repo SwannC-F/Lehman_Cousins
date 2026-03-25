@@ -11,7 +11,7 @@
 use anyhow::{bail, Result};
 use rust_decimal::Decimal;
 use tokio::sync::watch;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     core::{
@@ -21,7 +21,7 @@ use crate::{
     exchange_clients::traits::ExchangeClient,
     order_manager::{
         nonce::NonceGenerator,
-        rate_limiter::{RateLimitError, TokenBucket},
+        rate_limiter::TokenBucket,
     },
     risk_manager::manager::RiskManager,
 };

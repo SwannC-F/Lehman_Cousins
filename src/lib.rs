@@ -20,6 +20,7 @@ pub mod exchange_clients {
     pub mod websocket_client;
     pub mod rest_client;
     pub mod book_sync;
+    pub mod bybit;
 }
 
 pub mod strategies {

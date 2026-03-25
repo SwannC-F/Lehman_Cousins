@@ -1,33 +1,42 @@
+version: "3.8"
+
 services:
-  db:
-    # TimescaleDB — Postgres extension for time-series.
-    # Use this image in dev; in prod, run TimescaleDB on a dedicated EC2
-    # instance or use Amazon RDS with the timescaledb extension enabled.
-    image: timescale/timescaledb:latest-pg16
-    restart: unless-stopped
+  # The Database containing the massive chunks of Tick data and execution reports
+  timescaledb:
+    image: timescale/timescaledb-ha:pg15
     environment:
       POSTGRES_USER: lehman
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: lehman_db
-      TIMESCALEDB_TELEMETRY: "off"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepassword123}
+      POSTGRES_DB: lehmandb
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - timescale-data:/home/postgres/pgdata/data
+    healthcheck:
+      # Strict validation: Postgres is ready to accept actual queries
+      test: ["CMD-SHELL", "pg_isready -U lehman -d lehmandb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # The main High-Frequency Algorithm Engine
   engine:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "9090:9090"   # Prometheus metrics
+    # Conditional Orchestration: Wait for TimescaleDB to be fully operational
     depends_on:
-      - db
+      timescaledb:
+        condition: service_healthy
+    # Force restart on crashes to test the Exponential Backoff parameters on reboot
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # Expose Prometheus /metrics
     environment:
-      DATABASE_URL: postgres://lehman:password@db:5432/lehman_db
+      # AWS Credentials or KMS parameters inject externally via CI/CD runners (Never .env files!)
+      AWS_DEFAULT_REGION: eu-west-3
+      TRACING_FORMAT: json
+      APP_ENV: production
 
 volumes:
-  postgres_data:
+  timescale-data:

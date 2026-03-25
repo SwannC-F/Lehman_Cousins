@@ -1,69 +1,30 @@
-# =============================================================================
-# Lehman_Cousins — Multi-stage Dockerfile
-# Stage 1 : builder  — compile the release binary with full Rust toolchain
-# Stage 2 : runtime  — minimal Debian slim image, no compiler, no sources
-# =============================================================================
+# Stage 1: Builder
+# Uses slim Debian Bookworm standard Rust image
+FROM rust:1.75-slim-bookworm AS builder
 
-# ── Stage 1 : Builder ─────────────────────────────────────────────────────────
-FROM rust:1.78-slim-bookworm AS builder
+# Ensure required C compilation dependencies for standard packages and musl/static libs if needed
+RUN apt-get update && apt-get install -y pkg-config libssl-dev protobuf-compiler curl
 
-WORKDIR /usr/src/lehman_cousins
+WORKDIR /app
+COPY . .
 
-# Install system dependencies required by crates (SSL, pkg-config for sqlx, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config           \
-        libssl-dev           \
-        libpq-dev            \
-    && rm -rf /var/lib/apt/lists/*
+# Build the release binary. We prioritize heavy LLVM optimization (opt-level=3, LTO=fat in Cargo.toml).
+# We exclusively target the main production application "lehman_cousins".
+RUN cargo build --release --bin lehman_cousins
 
-# ── Dependency caching layer ──────────────────────────────────────────────────
-# Copy manifests first so Docker cache is reused when only src changes.
-COPY Cargo.toml Cargo.lock ./
-
-# Create a dummy main so `cargo build` can resolve the full dependency tree.
-RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
-    echo '' > src/lib.rs && \
-    cargo build --release --locked && \
-    rm -rf src
-
-# ── Full build ────────────────────────────────────────────────────────────────
-COPY src ./src
-COPY migrations ./migrations
-
-# Touch main.rs to force recompile of the application binary.
-RUN touch src/main.rs && \
-    cargo build --release --locked
-
-# =============================================================================
-# ── Stage 2 : Runtime ─────────────────────────────────────────────────────────
-FROM debian:bookworm-slim AS runtime
-
-# Metadata labels
-LABEL org.opencontainers.image.title="lehman_cousins"
-LABEL org.opencontainers.image.description="Algorithmic trading engine — StatArb & Market Making"
-LABEL org.opencontainers.image.version="0.1.0"
-
-# Install minimal runtime libraries (SSL, CA certs, libpq for sqlx)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates  \
-        libssl3          \
-        libpq5           \
-    && rm -rf /var/lib/apt/lists/*
-
-# Non-root user for security
-RUN useradd --uid 10001 --no-create-home --shell /sbin/nologin trader
-USER trader
+# Stage 2: Distroless Runner
+# No Shell. No Package Manager. Minimal attack surface.
+FROM gcr.io/distroless/cc-debian12
 
 WORKDIR /app
 
-# Copy only the compiled binary from builder
-COPY --from=builder /usr/src/lehman_cousins/target/release/lehman_cousins ./lehman_cousins
+# The user is strictly forced to nonroot implicitly provided by Google's Distroless
+USER nonroot
 
-# Prometheus metrics port
-EXPOSE 9090
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/target/release/lehman_cousins /app/lehman_cousins
 
-# Health-check — verifies the process is alive
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD pgrep lehman_cousins || exit 1
+# Port exposition for Prometheus metrics scrape
+EXPOSE 9000
 
-ENTRYPOINT ["./lehman_cousins"]
+ENTRYPOINT ["/app/lehman_cousins"]

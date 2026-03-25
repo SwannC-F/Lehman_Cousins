@@ -6,7 +6,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::core::events::MarketEvent;
 use crate::core::models::{ExecutionReport, Order, OrderBookUpdate, OrderStatus, Side, OrderType, SymbolId};
 use rust_decimal::Decimal;
 
